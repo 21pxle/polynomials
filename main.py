@@ -77,6 +77,8 @@ class Polynomial(list[complex]):
 
     # Computes the polynomial Q(x) such that self * P(x) is congruent to 1 modulo x ** max_degree
     def recip(self, max_degree: int = -1) -> 'Polynomial':
+        # Source: https://www.csa.iisc.ac.in/~chandan/courses/CNT/notes/lec6.pdf
+        # Time complexity: O(n log n), as compared to O(n^2) for traditional algorithms.
         if max_degree == -1:
             return self.recip(len(self))
         elif max_degree == 0 or len(self) == 0:
