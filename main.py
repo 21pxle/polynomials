@@ -15,7 +15,6 @@ def normalize(x):
 
 
 class Polynomial(list[complex]):
-
     def __init__(self, coeffs: Iterable[complex] | complex | float | int = None):
         super().__init__()
         if coeffs is None:
@@ -73,7 +72,7 @@ class Polynomial(list[complex]):
         return Polynomial(0), Polynomial(self)
 
     def trim(self, max_degree):
-        return Polynomial(self[:(max_degree+1)])
+        return Polynomial(self[:(max_degree + 1)])
 
     # Computes the polynomial Q(x) such that self * P(x) is congruent to 1 modulo x ** max_degree
     def recip(self, max_degree: int = -1) -> 'Polynomial':
@@ -86,11 +85,11 @@ class Polynomial(list[complex]):
         elif max_degree == 1:
             return Polynomial(1 / self[0])  # should throw error for zero.
         m: int = int(2 ** (np.ceil(np.log2(max_degree)) - 1))
-        a: Polynomial = self.recip(m)
-        h0: Polynomial = Polynomial(self[:m])
-        h1: Polynomial = Polynomial(self[m:(2 * m)])  # a polynomial with degree k // 2
-        c, _ = a.mul(h0).div_by_power(m)
-        return (a - a.mul(h1.mul(a).add(c).mul_by_power(m))).trim(max_degree)
+        a: Polynomial = self.recip(m)  # q1
+        h0: Polynomial = Polynomial(self[:m])  # p1, a polynomial with degree m
+        h1: Polynomial = Polynomial(self[m:(2 * m)])  # p2, another polynomial with degree m
+        c, _ = a.mul(h0).div_by_power(m)  # q2 = c = (a * h0) / x^m
+        return (a - a.mul(h1.mul(a).add(c).mul_by_power(m))).trim(max_degree)  # a = max_degree // 2
 
     def degree(self):
         return len(list(self)) - 1
@@ -98,7 +97,7 @@ class Polynomial(list[complex]):
     def iszero(self):
         return len(list(self)) == 1 and list(self)[0] == 0
 
-    def __divmod__(self, divisor):
+    def __divmod__(self, divisor: 'Polynomial'):
         if divisor.iszero():
             raise ArithmeticError("/ by 0")
         quotient: Polynomial
@@ -130,9 +129,54 @@ class Polynomial(list[complex]):
     def __mod__(self, divisor):
         return divmod(self, divisor)[1]
 
+    def __call__(self, x: Iterable[complex] | complex):
+        r = 0
+        if isinstance(x, complex) or isinstance(x, float) or isinstance(x, int):
+            if len(self) == 0:
+                return 0
+            for c in reversed(self):
+                r = (r * x) + c
+            return r
+        else:
+            # Multiply polynomials
+            # Pre-compute a list
+            polys: list[list[Polynomial]] = [[]]
+            for r in x:
+                polys[0].append(Polynomial([-r, 1]))
+            # Until there are two polynomials left.
+            while len(polys[-1]) > 2:
+                # Multiply two polynomials, keep the 3rd polynomial.
+                lst = polys[-1]
+                polys.append([])
+                for i in range(len(lst) // 2):
+                    polys[-1].append(lst[2 * i].mul(lst[2 * i + 1]))
+                if len(lst) % 2 == 1:
+                    polys[-1].append(lst[-1])
+
+            return self.eval_multipoint(list(x), polys, 0)
+
+    # Takes O(n log(n)^2) time to evaluate O(n) points, so it takes O(log(n)^2) amortized time per root.
+    # This evaluation process takes in a point and
+    def eval_multipoint(self, x, polys, idx):
+        # If n is a power of 2, divide by 2.
+        # Else, divide the rounded up version of n by 2.
+        n = len(x)
+
+        # Calculate m = 2^(ceil(log2 n)) / 2
+        if n == 1:
+            # Use single-point evaluation instead.
+            return [self(x[0])]
+        m = 2 ** ((n - 1).bit_length() - 1)
+        p0 = self % polys[-1][2 * idx]
+        r0 = p0.eval_multipoint(x[:m], polys[:-1], 2 * idx)
+        p1 = self % polys[-1][2 * idx + 1]
+        r1 = p1.eval_multipoint(x[m:], polys[:-1], 2 * idx + 1)
+
+        results = r0 + r1
+        return results
+
 
 if __name__ == '__main__':
-    x = Polynomial([-2, 0, 1, 1, -1, 1, -1, 1])
-    y = Polynomial([-2, 0, 1])
-
-    print(y.derivative())
+    x = Polynomial([1, 2, 3])
+    y = Polynomial([-1, 1])
+    print(x % y)
