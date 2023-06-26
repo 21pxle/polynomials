@@ -30,7 +30,7 @@ polynomial *pdiv_bp(polynomial, size_t);
 
 complex peval(polynomial, complex);
 complex *pevalm(polynomial, complex *, size_t);
-void pevalmr(complex *, polynomial *, polynomial **, complex *, unsigned int, int, int);
+void pevalmr(complex *, polynomial, polynomial **, complex *, unsigned int, int, int);
 polynomial pmul(polynomial, polynomial);
 void pmul_ip(polynomial *, polynomial);
 polynomial pmul_bp(polynomial, size_t);
@@ -39,6 +39,8 @@ void pmul_bp_ip(polynomial *, size_t);
 
 polynomial pneg(polynomial);
 void pneg_ip(polynomial *);
+
+polynomial precip(polynomial, int);
 
 polynomial prev(polynomial);
 void prev_ip(polynomial *);
@@ -65,16 +67,16 @@ void arr_deep_copy(complex *output, complex *input, size_t size) {
 void display_array(complex *arr, size_t size, size_t precision) {
     int i;
     double ci;
-    
+
     char* format_string = malloc(35);
     printf("[");
-    
+
     strcpy(format_string, "%%.%df%%+.%df*i     ");
     sprintf(format_string, format_string, precision, precision);
     for (i = 0; i < size - 1; i++) {
         printf(format_string, creal(arr[i]), cimag(arr[i]));
     }
-    
+
     strcpy(format_string, "%%.%df%%+.%df*i");
     sprintf(format_string, format_string, precision, precision);
     printf(format_string, creal(arr[i]), cimag(arr[i]));
@@ -91,28 +93,28 @@ void fft(complex *output, size_t size, int inverse) {
         fprintf(stderr, "Size must be a power of two.");
         exit(1);
     }
-    
+
     int idx, new_size;
     complex *odds, *evens;
     if (size > 1) {
         new_size = size / 2;
-        
+
         odds = malloc(new_size * sizeof(complex));
         evens = malloc(new_size * sizeof(complex));
         if (odds == NULL || evens == NULL) {
             fprintf(stderr, "Cannot allocate memory for the Fourier transform.");
             exit(1);
         }
-        
+
         for (idx = 0; idx < new_size; idx++) {
             evens[idx] = output[2*idx];
             odds[idx] = output[2*idx + 1];
         }
-        
+
         fft(evens, new_size, inverse);
         fft(odds, new_size, inverse);
-        
-        
+
+
         for (idx = 0; idx < new_size; idx++) {
             complex omega = cexp(2 * M_PI * I * idx * (inverse ? 1 : -1) / size),
             p, q;
@@ -131,7 +133,7 @@ void fft(complex *output, size_t size, int inverse) {
 void fft_it(complex *output, size_t size, int inverse) {
     int i, j, k, l, r;
     complex temp, u, v, w, wl;
-    
+
     k = log2_int(size);
     for (i = 0; i < size; i++) {
         r = reverse(i, k);
@@ -141,7 +143,7 @@ void fft_it(complex *output, size_t size, int inverse) {
             output[r] = temp;
         }
     }
-    
+
     for (l = 2; l <= size; l <<= 1) {
         wl = cexp(2 * M_PI * I * (inverse ? 1 : -1) / l);
         for (i = 0; i < size; i += l) {
@@ -155,7 +157,7 @@ void fft_it(complex *output, size_t size, int inverse) {
             }
         }
     }
-    
+
     if (inverse) {
         for (i = 0; i < size; i++) {
             output[i] /= size;
@@ -165,14 +167,14 @@ void fft_it(complex *output, size_t size, int inverse) {
 
 unsigned int log2_int(unsigned int x) {
     int i, r = 0, t = x;
-    
+
     for (i = 4 * sizeof(int); t && i; i >>= 1) {
         if (t >> i) {
             t >>= i;
             r += i;
         }
     }
-    
+
     return r;
 }
 
@@ -181,20 +183,20 @@ polynomial padd(polynomial p, polynomial q) {
     complex *result, *curr, *pc, *qc;
     int idx, size, pd, qd;
     polynomial r;
-    
+
     pd = p.degree;
     qd = q.degree;
-    
+
     // Ensure p has degree >= q.
     if (qd > pd) {
         return padd(q, p);
     }
-    
+
     pc = p.coeffs;
     qc = q.coeffs;
-    
+
     // Since p has degree >= q, it would make sense to add coeffs of q to p.
-    
+
     result = malloc((1 + pd) * sizeof(complex));
     if (result == NULL) {
         fprintf(stderr, "Cannot allocate memory to result.");
@@ -214,12 +216,12 @@ polynomial padd(polynomial p, polynomial q) {
 void padd_ip(polynomial *p, polynomial q) {
     int pd, qd, td, idx, rd;
     complex *pc, *qc, *curr;
-    
+
     pd = p->degree;
     pc = p->coeffs;
     qd = q.degree;
     qc = q.coeffs;
-    
+
     if (pd < qd) {
         pc = realloc(pc, (1 + qd) * sizeof(complex));
         if (pc == NULL) {
@@ -245,40 +247,41 @@ polynomial *pdiv(polynomial p, polynomial q) {
     polynomial *result;
     complex *pc, *qc;
     int pd, qd, dd, degree;
-    
+
     pc = p.coeffs;
     qc = q.coeffs;
     pd = p.degree;
     qd = q.degree;
 
     result = malloc(2 * sizeof(polynomial));
+    if (result == NULL) {
+        fprintf(stderr, "Cannot allocate memory to quotient and remainder.\n");
+        exit(1);
+    }
+
     if (pd < qd) {
         ps_zero(result);
         pset_p(result + 1, q);
         return result;
     }
-    
+
     prev_ip(&p);
     prev_ip(&q);
     degree = pd - qd;
-    if (result == NULL) {
-        fprintf(stderr, "Cannot allocate memory to quotient and remainder.\n");
-        exit(1);
-    }
+
     pset_p(result, p);
     pmul_ip(result, precip(q, pd));
     pset(result, result->coeffs, degree + 1);
     // Reverse quotient.
-    poly_reverse_ip(result);
+    prev_ip(result);
     if ((dd = degree - result->degree) > 0) {
-        pmul_bp_ip(&result, dd);
+        pmul_bp_ip(result, dd);
     }
     prev_ip(&p);
     prev_ip(&q);
-    pset_p(result + 1, *result);
-    pmul_ip(result + 1, q);
-    psubr_ip(result + 1, );
-    
+    pset_p(&result[1], *result);
+    pmul_ip(&result[1], q);
+    psubr_ip(&result[1], p);
     return result;
 }
 
@@ -288,7 +291,7 @@ polynomial* pdiv_bp(polynomial p, size_t m) {
     polynomial *result;
     complex *pc;
     int pd;
-    
+
     pc = p.coeffs;
     pd = p.degree;
     result = malloc(2 * sizeof(polynomial));
@@ -296,7 +299,7 @@ polynomial* pdiv_bp(polynomial p, size_t m) {
         fprintf(stderr, "Cannot allocate memory to quotient and remainder.\n");
         exit(1);
     }
-    
+
     if (m <= pd) {
         pset(&result[0], pc + m, pd - m + 1);
         pset(&result[1], pc, m);
@@ -304,7 +307,7 @@ polynomial* pdiv_bp(polynomial p, size_t m) {
         ps_zero(&result[0]);
         pset(&result[1], pc, pd + 1);
     }
-    
+
     return result;
 }
 
@@ -312,7 +315,7 @@ polynomial* pdiv_bp(polynomial p, size_t m) {
 complex peval(polynomial p, complex z) {
     complex r = 0;
     int i;
-    
+
     for (i = p.degree; i > 0; i--) {
         r += p.coeffs[i];
         r *= z;
@@ -330,17 +333,16 @@ complex *pevalm(polynomial p, complex *z, size_t n) {
     complex *coeffs, *output, *pc;
     polynomial **polys = malloc(log2_int(n) * sizeof(polynomial *)), *pt;
     int i, j, k, b;
-    
+
     polys[0] = malloc(n * sizeof(polynomial));
     pt = polys[0];
     for (i = 0; i < n; i++) {
-        pt[i];
         pt[i].coeffs = malloc(2 * sizeof(complex));
-        pt[i].coeffs = -z[i];
-        *(pt[i].coeffs + 1) = 1;
+        pt[i].coeffs[0] = -z[i];
+        pt[i].coeffs[1] = 1;
         pt[i].degree = 1;
     }
-    
+
     for (i = n, k = 0, b = (n & 1); i > 2; i = (i + 1) / 2, k++, b = i & 1) {
         if (b) {
             polys[k + 1] = malloc((i / 2 + 1) * sizeof(polynomial));
@@ -348,14 +350,14 @@ complex *pevalm(polynomial p, complex *z, size_t n) {
         } else {
             polys[k + 1] = malloc((i / 2) * sizeof(polynomial));
         }
-        
+
         for (j = 0; j < i / 2; j++) {
             polys[k + 1][j] = pmul(polys[k][2 * j], polys[k][2 * j + 1]);
         }
     }
     output = malloc(n * sizeof(complex));
-    evalpmr(output, p, polys, z, log2_int(round_up(n)), n, 0);
-    
+    pevalmr(output, p, polys, z, log2_int(round_up(n)), n, 0);
+
     return output;
 }
 
@@ -370,17 +372,17 @@ int size - The size of *z.
 int index - The index on which the output will be written.
 Output: *output - p(z1), p(z2), ..., p(zl), where l is the length of z.
  */
-void pevalmr(complex *output, polynomial *p, polynomial **polys, complex *z, unsigned int layer, int size, int index) {
-    polynomial *p0, *p1;
+void pevalmr(complex *output, polynomial p, polynomial **polys, complex *z, unsigned int layer, int size, int index) {
+    polynomial p0, p1;
     int m;
     if (size == 1) {
-        *output = evaluate_poly(p, *z);
+        *output = peval(p, *z);
     } else {
         m = 1 << log2_int(size - 1);
-        p0 = *(pdiv(p, &polys[layer - 1][2 * index]) + 1);
+        p0 = pdiv(p, polys[layer - 1][2 * index])[1];
         pevalmr(output, p0, polys, z, layer - 1, m, 2 * index);
         if (polys[layer - 1][2 * index + 1].coeffs != NULL) {
-            p1 = *(pdiv(p, &polys[layer - 1][2 * index + 1]) + 1);
+            p1 = *(pdiv(p, polys[layer - 1][2 * index + 1]) + 1);
             pevalmr(output + m, p1, polys, z + m, layer - 1, m, 2 * index + 1);
         }
     }
@@ -391,12 +393,12 @@ polynomial pmul(polynomial p, polynomial q) {
     complex *pf, *qf, *pc, *qc, *rc;
     int i, j, pd, qd, rd;
     polynomial r;
-    
+
     pd = p.degree;
     qd = q.degree;
     pc = p.coeffs;
     qc = q.coeffs;
-    
+
     rd = pd + qd + 1;
     rd = round_up(rd);
     pf = malloc(rd * sizeof(complex));
@@ -406,32 +408,32 @@ polynomial pmul(polynomial p, polynomial q) {
         fprintf(stderr, "Cannot allocate memory.");
         exit(1);
     }
-    
+
     // Pad with zeroes.
-    
+
     for (i = 0; i <= pd; i++) {
         pf[i] = pc[i];
     }
     for (i = 0; i <= qd; i++) {
         qf[i] = qc[i];
     }
-    
+
     // Do in-place transformation.
     fft_it(pf, rd, 0);
     fft_it(qf, rd, 0);
-    
-    
-    
+
+
+
     // Do pointwise multiplication.
     for (i = 0; i < rd; i++) {
         rc[i] = pf[i] * qf[i];
     }
-    
+
     // Do inverse FFT.
     fft_it(rc, rd, 1);
-    
+
     pset(&r, rc, rd);
-    
+
     return r;
 }
 
@@ -440,7 +442,7 @@ polynomial pmul_bp(polynomial p, size_t power) {
     int i, pd;
     polynomial r;
     complex *pc, *coeffs;
-    
+
     pc = p.coeffs;
     pd = p.degree;
     coeffs = malloc((power + pd + 1) * sizeof(complex));
@@ -448,16 +450,16 @@ polynomial pmul_bp(polynomial p, size_t power) {
         fprintf(stderr, "Cannot allocate memory to quotient and remainder.\n");
         exit(1);
     }
-    
+
     for (i = 0; i < power; i++) {
         coeffs[i] = 0;
     }
     for (i = 0; i <= pd; i++) {
         coeffs[power + i] = pc[i];
     }
-    
+
     pset(&r, coeffs, power + p.degree + 1);
-    
+
     return r;
 }
 
@@ -465,16 +467,16 @@ polynomial pmul_bp(polynomial p, size_t power) {
 void pmul_bp_ip(polynomial *p, size_t power) {
     int i, pd;
     complex *pc, *coeffs, temp;
-    
+
     pc = p->coeffs;
     pd = p->degree;
-    
+
     pc = realloc(pc, (power + pd + 1) * sizeof(complex));
     if (pc == NULL) {
         fprintf(stderr, "Cannot allocate memory to quotient and remainder.\n");
         exit(1);
     }
-    
+
     for (i = pd; i >= 0; i--) {
         temp = pc[i];
         pc[i] = pc[power + i];
@@ -489,12 +491,12 @@ void pmul_ip(polynomial *p, polynomial q) {
     complex *pc, *qc, *qf;
     int i, j, pd, qd, rd;
     polynomial r;
-    
+
     pd = p->degree;
     qd = q.degree;
     pc = p->coeffs;
     qc = q.coeffs;
-    
+
     rd = pd + qd + 1;
     rd = round_up(rd);
     pc = realloc(pc, rd * sizeof(complex));
@@ -504,22 +506,25 @@ void pmul_ip(polynomial *p, polynomial q) {
         exit(1);
     }
     arr_deep_copy(qf, qc, qd + 1);
-    
+    for (i = qd + 1; i < rd; i++) {
+        qf[i] = 0;
+    }
+
     // Do in-place transformation.
     fft_it(pc, rd, 0);
     fft_it(qf, rd, 0);
-    
-    
-    
+
+
+
     // Do pointwise multiplication.
     for (i = 0; i < rd; i++) {
         pc[i] *= qf[i];
     }
-    
+
     // Do inverse FFT.
     fft_it(pc, rd, 1);
     // free(qf);
-    
+
     p->coeffs = pc;
     p->degree = pd + qd;
     if (qc == NULL) {
@@ -533,7 +538,7 @@ polynomial pneg(polynomial p) {
     polynomial r;
     complex *coeffs = malloc((p.degree + 1) * sizeof(complex));
     int i;
-    
+
     if (coeffs == NULL) {
         fprintf(stderr, "Cannot allocate memory.");
         exit(1);
@@ -542,34 +547,31 @@ polynomial pneg(polynomial p) {
         coeffs[i] = -p.coeffs[i];
     }
     pset(&r, coeffs, 1 + p.degree);
-    
+
     return r;
 }
 
 // Sets p to zero.
 void ps_zero(polynomial *p) {
-    polynomial r;
     complex *coeffs = malloc(sizeof(complex));
     int i;
-    
+
     if (coeffs == NULL) {
         fprintf(stderr, "Cannot allocate memory.");
         exit(1);
     }
     *coeffs = 0;
 
-    pset(&r, coeffs, 1);
-
-
+    pset(p, coeffs, 1);
 }
 
 // Sets p to -p.
 void pneg_ip(polynomial* p) {
     int idx, pd;
     complex *curr;
-    
+
     pd = p->degree;
-    
+
     for (curr = p->coeffs, idx = 0; idx <= pd; idx++, curr++) {
         *curr = -*curr;
     }
@@ -577,7 +579,7 @@ void pneg_ip(polynomial* p) {
 
 // Calculates the polynomial q such that p(x) * q(x) == 1 (mod x^degree).
 polynomial precip(polynomial p, int degree) {
-    polynomial r, p1, p2, q1, q2, tmp;
+    polynomial r, p1, p2, q1, q2;
     complex *c, *pc;
     int m, pd;
 
@@ -591,15 +593,15 @@ polynomial precip(polynomial p, int degree) {
             fprintf(stderr, "Cannot allocate memory.");
             exit(1);
         }
+        ps_zero(&r);
         *c = 1 / *pc;
-        pset(&r, c, 1);
-        
+        r.coeffs = c;
         return r;
     }
-    
+
     pc = p.coeffs;
     pd = p.degree;
-    
+
     m = round_up(degree) / 2;
     q1 = precip(p, m);
 
@@ -618,23 +620,18 @@ polynomial precip(polynomial p, int degree) {
             pset(&p2, pc + m, m);
             break;
     }
-    // set q2 = ((q1 (mod x^m)) * p1) mod x^m
+    // set q2 = (q1 * p1) / x^m, discard remainder
     pset(&q2, q1.coeffs, m);
     pmul_ip(&q2, p1);
     q2 = *pdiv_bp(q2, m);
-    
-    // tmp = constant polynomial 1
-    ps_zero(&tmp);
-    *(tmp.coeffs) = 1;
 
-    // r = q1 * (1 - (q1 * (p2 * q1 + q2) * x^m)
     // r = q1 - (q1 * (p2 * q1) + q2) * x^m
     pset_p(&r, p2);
     pmul_ip(&r, q1);
     padd_ip(&r, q2);
     pmul_bp_ip(&r, m);
-    psubr_ip(&r, tmp);
     pmul_ip(&r, q1);
+    psubr_ip(&r, q1);
     pset(&r, r.coeffs, degree);
     return r;
 }
@@ -644,19 +641,19 @@ polynomial prev(polynomial p) {
     int idx, pd;
     complex *pc,*coeffs, *result;
     polynomial r;
-    
+
     pc = p.coeffs;
     pd = p.degree;
-    
+
     result = malloc((pd + 1) * sizeof(complex));
-    
+
     for (coeffs = pc + pd, idx = 0; coeffs >= pc; coeffs--, idx++) {
         result[idx] = *coeffs;
     }
-    
+
     r.coeffs = result;
     r.degree = pd;
-    
+
     return r;
 }
 
@@ -665,10 +662,10 @@ void prev_ip(polynomial *p) {
     int i, j, pd;
     complex *coeffs, *pc, *result, tmp;
     polynomial r;
-    
+
     pc = p->coeffs;
     pd = p->degree;
-    
+
     for (i = 0, j = pd; i < j; i++, j--) {
         tmp = pc[i];
         pc[i] = pc[j];
@@ -686,12 +683,12 @@ void prev_ip(polynomial *p) {
 void pset(polynomial *p, complex *coeffs, size_t length) {
     complex *coeff, *terms, *curr;
     int idx, size;
-    
+
     coeff = coeffs + length - 1;
     // Iterate from term to term.
     // While terms has next element:
     for (size = length; size > 1 && cabs(*coeff--) < EPSILON; size--) ;
-    
+
     terms = malloc(size * sizeof(complex));
     if (p == NULL || terms == NULL) {
         fprintf(stderr, "Cannot allocate memory for new coefficients.");
@@ -700,7 +697,7 @@ void pset(polynomial *p, complex *coeffs, size_t length) {
     for (idx = 0; idx < size; idx++) {
         terms[idx] = coeffs[idx];
     }
-    
+
     p->coeffs = terms;
     p->degree = size - 1;
 }
@@ -720,7 +717,7 @@ void pset_p(polynomial *p, polynomial q) {
     for (idx = 0; idx < size; idx++) {
         terms[idx] = q.coeffs[idx];
     }
-    
+
     p->coeffs = terms;
     p->degree = size - 1;
 }
@@ -730,15 +727,15 @@ polynomial psub(polynomial p, polynomial q) {
     int idx, size, pd, qd, max;
     complex *result, *curr, *pc, *qc;
     polynomial r;
-    
+
     pd = p.degree;
     pc = p.coeffs;
     qd = q.degree;
     qc = q.coeffs;
-    
+
     max = MAX(pd, qd);
     result = malloc((1 + max) * sizeof(complex));
-    
+
     if (result == NULL) {
         fprintf(stderr, "Cannot allocate memory to result.");
         exit(1);
@@ -749,22 +746,21 @@ polynomial psub(polynomial p, polynomial q) {
     for (idx = 0; idx <= qd; idx++) {
         result[idx] -= q.coeffs[idx];
     }
-    r.coeffs = result;
-    r.degree = max;
-    
+    pset(&r, result, max + 1);
+
     return r;
 }
 
 // Compute p - q and stores the result in p.
 void psub_ip(polynomial *p, polynomial q) {
-    int pd, qd, td, idx, rd;
+    int pd, qd, npd, td, idx, rd;
     complex *pc, *qc, *curr;
-    
+
     pd = p->degree;
     pc = p->coeffs;
     qd = q.degree;
     qc = q.coeffs;
-    
+
     if (pd < qd) {
         pc = realloc(pc, (1 + qd) * sizeof(complex));
         if (pc == NULL) {
@@ -773,26 +769,29 @@ void psub_ip(polynomial *p, polynomial q) {
         }
         p->degree = qd;
     }
+    npd = p->degree;
+
     for (idx = 0, curr = qc; idx <= qd; curr++, idx++) {
-        pc[idx] -= *curr;
+        pc[idx] += *curr;
     }
     // Trim trailing zeros
-    curr--;
-    while (p->degree && cabs(*curr--) < EPSILON) {
-        (p->degree)--;
+    curr = p->coeffs + npd;
+    while (npd && cabs(*curr--) < EPSILON) {
+        npd--;
     }
+    p->degree = npd;
 }
 
 // Calculates q - p and stores the result in p.
 void psubr_ip(polynomial *p, polynomial q) {
-    int pd, qd, td, idx, rd;
+    int pd, npd, qd, td, idx, rd;
     complex *pc, *qc, *curr;
-    
+
     pd = p->degree;
     pc = p->coeffs;
     qd = q.degree;
     qc = q.coeffs;
-    
+
     if (pd < qd) {
         pc = realloc(pc, (1 + qd) * sizeof(complex));
         if (pc == NULL) {
@@ -801,14 +800,19 @@ void psubr_ip(polynomial *p, polynomial q) {
         }
         p->degree = qd;
     }
+    npd = p->degree;
+    for (idx = 0, curr = pc; idx <= pd; curr++, idx++) {
+        pc[idx] *= -1;
+    }
     for (idx = 0, curr = qc; idx <= qd; curr++, idx++) {
-        pc[idx] = *curr - pc[idx];
+        pc[idx] += qc[idx];
     }
     // Trim trailing zeros
-    curr--;
-    while (p->degree && cabs(*curr--) < EPSILON) {
-        (p->degree)--;
+    curr = p->coeffs + npd;
+    while (npd && cabs(*curr--) < EPSILON) {
+        npd--;
     }
+    p->degree = npd;
 }
 
 // Reverses x, up to a given size.
@@ -835,11 +839,11 @@ unsigned int round_up(unsigned int x) {
 int main() {
     polynomial output;
     polynomial p[3];
-    complex coeffs[3][4] = {{1, -2, 0, 0}, {1, 1, 1, 1}, {0, 0, 0}};
-    complex z;
-    pset(&p[0], coeffs[0], 2);
+    complex coeffs[3][4] = {{1, 2, 2}, {0, 1, 1, 0}, {0, 0, 0}};
+    complex z[4] = {1, 2, 3, 4};
+    pset(&p[0], coeffs[0], 4);
     pset(&p[1], coeffs[1], 4);
     pset(&p[2], coeffs[2], 2);
-    display_polynomial(precip(p[0], 11), 0);
+    display_polynomial(pdiv(p[0], p[1])[0], 0);
     return 0;
 }
