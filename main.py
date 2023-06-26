@@ -89,7 +89,7 @@ class Polynomial(list[complex]):
         h0: Polynomial = Polynomial(self[:m])  # p1, a polynomial with degree m
         h1: Polynomial = Polynomial(self[m:(2 * m)])  # p2, another polynomial with degree m
         c, _ = a.mul(h0).div_by_power(m)  # q2 = c = (a * h0) / x^m
-        return (a - a.mul(h1.mul(a).add(c).mul_by_power(m))).trim(max_degree)  # a = max_degree // 2
+        return (a - a.mul(h1.mul(a).add(c).mul_by_power(m))).trim(max_degree - 1)  # a = max_degree // 2
 
     def degree(self):
         return len(list(self)) - 1
@@ -177,6 +177,6 @@ class Polynomial(list[complex]):
 
 
 if __name__ == '__main__':
-    x = Polynomial([1, 2, 3])
-    y = Polynomial([-1, 1])
-    print(x % y)
+    # x = Polynomial([1, 2, 3])
+    y = Polynomial([1, -2]).recip(11)
+    print(y)
