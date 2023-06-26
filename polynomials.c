@@ -62,57 +62,60 @@ void arr_deep_copy(complex *output, complex *input, size_t size) {
     }
 }
 
+// Displays an array.
 void display_array(complex *arr, size_t size, size_t precision) {
     int i;
     double ci;
-    
+
     char* format_string = malloc(35);
     printf("[");
-    
+
     strcpy(format_string, "%%.%df%%+.%df*i     ");
     sprintf(format_string, format_string, precision, precision);
     for (i = 0; i < size - 1; i++) {
         printf(format_string, creal(arr[i]), cimag(arr[i]));
     }
-    
+
     strcpy(format_string, "%%.%df%%+.%df*i");
     sprintf(format_string, format_string, precision, precision);
     printf(format_string, creal(arr[i]), cimag(arr[i]));
     printf("]\n");
 }
 
+// Displays the coefficients of the polynomial, little endian.
 void display_polynomial(polynomial p, size_t precision) {
     display_array(p.coeffs, p.degree + 1, precision);
 }
 
+// A recursive implmentation of the FFT algorithm.
 void fft(complex *output, size_t size, int inverse) {
     // if size is not a power of two:
     if (size & (size - 1)) {
         fprintf(stderr, "Size must be a power of two.");
         exit(1);
     }
-    
+
     int idx, new_size;
     complex *odds, *evens;
     if (size > 1) {
         new_size = size / 2;
-        
+
         odds = malloc(new_size * sizeof(complex));
         evens = malloc(new_size * sizeof(complex));
         if (odds == NULL || evens == NULL) {
             fprintf(stderr, "Cannot allocate memory for the Fourier transform.");
             exit(1);
         }
-        
+
         for (idx = 0; idx < new_size; idx++) {
             evens[idx] = output[2*idx];
             odds[idx] = output[2*idx + 1];
         }
-        
+
         fft(evens, new_size, inverse);
         fft(odds, new_size, inverse);
-        
-        
+
+
         for (idx = 0; idx < new_size; idx++) {
             complex omega = cexp(2 * M_PI * I * idx * (inverse ? 1 : -1) / size),
             p, q;
@@ -128,6 +131,7 @@ void fft(complex *output, size_t size, int inverse) {
     }
 }
 
+// An iterative implementation of the FFT algorithm.
 void fft_it(complex *output, size_t size, int inverse) {
     int i, j, k, l, r;
     complex temp, u, v, w, wl;
