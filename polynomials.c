@@ -64,6 +64,7 @@ void arr_deep_copy(complex *output, complex *input, size_t size) {
     }
 }
 
+// Displays an array.
 void display_array(complex *arr, size_t size, size_t precision) {
     int i;
     double ci;
@@ -83,10 +84,12 @@ void display_array(complex *arr, size_t size, size_t precision) {
     printf("]\n");
 }
 
+// Displays the coefficients of the polynomial, little endian.
 void display_polynomial(polynomial p, size_t precision) {
     display_array(p.coeffs, p.degree + 1, precision);
 }
 
+// A recursive implmentation of the FFT algorithm.
 void fft(complex *output, size_t size, int inverse) {
     // if size is not a power of two:
     if (size & (size - 1)) {
@@ -130,6 +133,7 @@ void fft(complex *output, size_t size, int inverse) {
     }
 }
 
+// An iterative implementation of the FFT algorithm.
 void fft_it(complex *output, size_t size, int inverse) {
     int i, j, k, l, r;
     complex temp, u, v, w, wl;
